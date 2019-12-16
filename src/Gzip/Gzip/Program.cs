@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Drawing;
 using System.Linq;
 using System.Threading;
 
@@ -9,6 +10,13 @@ namespace Gzip
     public class Program
     {
         private static readonly CancellationTokenSource CancellationTokenSource = new CancellationTokenSource();
+
+        class ParamsNames
+        {
+            public const string Size = "size";
+            public const string Compatibility = "compatibility";
+        }
+
 
         static void Main(string[] args)
         {
@@ -31,7 +39,8 @@ namespace Gzip
                         Lib.Gzip.Compress(
                             param["inFile"],
                             param["outFile"],
-                            param.ContainsKey("size") ? int.Parse(param["size"]) : 1,
+                            param.ContainsKey(ParamsNames.Size) ? int.Parse(param[ParamsNames.Size]) : 1,
+                            param.ContainsKey(ParamsNames.Compatibility),
                             CancellationTokenSource);
                         break;
                     case "decompress":
@@ -87,7 +96,7 @@ namespace Gzip
             var param = new Dictionary<string, string>();
             var options = args.Where(x => x.StartsWith("-"));
 
-            var sizeString = options.FirstOrDefault(x => x.StartsWith("-size=", StringComparison.OrdinalIgnoreCase));
+            var sizeString = options.FirstOrDefault(x => x.StartsWith("-" + ParamsNames.Size + "=", StringComparison.OrdinalIgnoreCase));
             if (sizeString != null)
             {
                 var parts = sizeString.Split("=");
@@ -95,7 +104,7 @@ namespace Gzip
                 {
                     if (int.TryParse(parts[1], out int size))
                     {
-                        param["size"] = size.ToString();
+                        param[ParamsNames.Size] = size.ToString();
                     }
                     else
                     {
@@ -106,6 +115,12 @@ namespace Gzip
                 {
                     throw new ArgumentException("Parameter size have incorrect format");
                 }
+            }
+
+            var isCompatibility = options.FirstOrDefault(x => x.StartsWith("-" + ParamsNames.Compatibility, StringComparison.OrdinalIgnoreCase));
+            if (isCompatibility != null)
+            {
+                param[ParamsNames.Compatibility] = "true";
             }
 
             var fileParams = args.Where(x => !x.StartsWith("-")).ToList();
@@ -133,7 +148,8 @@ Usage: gzip [compress|decompress] <inFile> <outFile>
 compression/decompression tool using Lempel-Ziv coding (LZ77)                    
 
 Options:
-    -s, -size   file chunk size (MB)
+    -size   file chunk size (MB)
+    -compatibility format with rfc1952
 ";
 
             Console.WriteLine(helpMessage);

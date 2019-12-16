@@ -15,8 +15,9 @@ namespace Gzip.Lib
         /// <param name="inFile">Input file path.</param>
         /// <param name="outFile">Output file path.</param>
         /// <param name="chunkSize">Size of chunk.</param>
+        /// <param name="isCompatibility">compatibility rfc1952</param>
         /// <param name="cancellationTokenSource">Cancellation token source.</param>
-        public static void Compress(string inFile, string outFile, int chunkSize, CancellationTokenSource cancellationTokenSource = null)
+        public static void Compress(string inFile, string outFile, int chunkSize, bool isCompatibility, CancellationTokenSource cancellationTokenSource = null)
         {
             var size = Environment.ProcessorCount;
 
@@ -33,7 +34,7 @@ namespace Gzip.Lib
                             .Pipe<BlockingPipe<FileChunk>>(size)
                             .Step<CompressWorker>(size)
                             .Pipe<OrderingPipe>(size)
-                            .Step(new GzipWriteFileWorker(outFileStream))
+                            .Step(new GzipWriteFileWorker(outFileStream, isCompatibility))
                             .Run();
                     }
                 }
@@ -54,16 +55,35 @@ namespace Gzip.Lib
         public static void Decompress(string inFile, string outFile, CancellationTokenSource cancellationTokenSource = null)
         {
             var workFlow = new WorkFlow<FileChunk>(cancellationTokenSource);
+            var readHeader = new byte[4];
+            var size = Environment.ProcessorCount;
 
             try
             {
                 using (var inFileStream = new FileStream(inFile, FileMode.Open))
                 {
+                    
                     using (var outFileStream = new FileStream(outFile, FileMode.Create))
                     {
-                        workFlow
-                            .Step(new DecompressWorker(inFileStream, outFileStream))
-                            .Run();
+
+                        inFileStream.Read(readHeader, 0, readHeader.Length);
+                        inFileStream.Position = 0;
+                        if (readHeader[3] == 1 << 6)
+                        {
+                            workFlow
+                                .Step(new GzipReadFileWorker(inFileStream))
+                                .Pipe<BlockingPipe<FileChunk>>(size)
+                                .Step<DecompressWorker>(size)
+                                .Pipe<OrderingPipe>(size)
+                                .Step(new FileWriteWorker(outFileStream))
+                                .Run();
+                        }
+                        else
+                        {
+                            workFlow
+                                .Step(new DecompressSingleThreadWorker(inFileStream, outFileStream))
+                                .Run();
+                        }
                     }
                 }
             }

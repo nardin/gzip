@@ -1,27 +1,45 @@
-﻿using System;
+﻿using System.Buffers;
 using System.IO;
 using System.IO.Compression;
 using Gzip.Lib.Common;
 
 namespace Gzip.Lib.Worker
 {
-    internal class DecompressWorker : BaseWorker<FileChunk>
+    class DecompressWorker : BaseWorker<FileChunk>
     {
-        private readonly Stream _inStream;
-        private readonly Stream _outStream;
-
-        public DecompressWorker(Stream inStream, Stream outStream)
-        {
-            this._inStream = inStream;
-            this._outStream = outStream;
-        }
-
         public override void Run()
         {
-            using (var decompressionStream = new GZipStream(this._inStream, CompressionMode.Decompress))
+            while (true)
             {
+                var chunk = _inPipe.Take();
+                if (chunk == default(FileChunk))
+                {
+                    break;
+                }
+
+                using (var baseStream = new MemoryStream(chunk.Data, 0, chunk.Length))
+                {
+                    using (var gzipStream = new GZipStream(baseStream, CompressionMode.Decompress))
+                    {
+                        
+
+                        using (var resultStream = new MemoryStream())
+                        {
+                            gzipStream.CopyTo(resultStream);
+                            var data = resultStream.ToArray();
+                            var outChunk = new FileChunk()
+                            {
+                                Number = chunk.Number,
+                                Data = data,
+                                Length = data.Length
+
+                            };
+                            ArrayPool<byte>.Shared.Return(chunk.Data);
+                            _outPipe.Add(outChunk);
+                        }
+                    }
+                }
                 cancellationToken.ThrowIfCancellationRequested();
-                decompressionStream.CopyTo(_outStream);
             }
         }
     }

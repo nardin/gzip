@@ -15,8 +15,6 @@ namespace Gzip.Lib.Collection
         private readonly object _lockRead = new object();
         private volatile int _countLink = 0;
         private volatile int _current = 0;
-        private volatile int _watch;
-        private volatile int _readwatch;
 
         private readonly Queue<FileChunk> _collection;
 
@@ -42,15 +40,10 @@ namespace Gzip.Lib.Collection
         {
             lock (_lockRead)
             {
-                var watch = new Stopwatch();
                 while ((this._collection.Count >= this._boundedCapacity && this._boundedCapacity != 0 && !this.IsCompleted) || this._current != t.Number)
                 {
-                    watch.Start();
                     Monitor.Wait(_lockRead);
-                    watch.Stop();
                 }
-                Interlocked.Add(ref _watch, (int)watch.ElapsedMilliseconds);
-                Console.WriteLine("OWatch: " + _watch);
 
                 Interlocked.Increment(ref this._current); 
 
@@ -63,16 +56,10 @@ namespace Gzip.Lib.Collection
         {
             lock (_lockRead)
             {
-                var watch = new Stopwatch();
                 while (this._collection.Count == 0 && !this.IsCompleted)
                 {
-                    watch.Start();
                     Monitor.Wait(_lockRead);
-                    watch.Stop();
                 }
-
-                Interlocked.Add(ref _readwatch, (int)watch.ElapsedMilliseconds);
-                Console.WriteLine("OReadwatch: " + _readwatch);
 
                 if (this._collection.Count == 0)
                 {

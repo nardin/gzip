@@ -1,12 +1,20 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace Gzip.Lib.Tests
 {
     public class GzipTests
     {
+        private readonly ITestOutputHelper output;
+
+        public  GzipTests(ITestOutputHelper output)
+        {
+            this.output = output;
+        }
         [Fact]
         public void CompressTest()
         {
@@ -26,15 +34,70 @@ namespace Gzip.Lib.Tests
                     fileStream.Write(buffer);
                 }
 
-                Gzip.Compress(inputFile, compressedFile, 1);
+                var watch = new Stopwatch();
+                watch.Start();
+                Gzip.Compress(inputFile, compressedFile, 1, false);
+                watch.Stop();
+                output.WriteLine("Compress not Compatibility: " + watch.ElapsedMilliseconds);
+                watch.Restart();
                 Gzip.Decompress(compressedFile, decompressedFile);
+                watch.Stop();
+                output.WriteLine("Decompress not Compatibility: " + watch.ElapsedMilliseconds);
 
                 Assert.True(FileCompare(inputFile, decompressedFile));
 
             }
-            catch (Exception e)
+            finally
             {
-                throw;
+                if (File.Exists(inputFile))
+                {
+                    File.Delete(inputFile);
+                }
+
+                if (File.Exists(compressedFile))
+                {
+                    File.Delete(compressedFile);
+                }
+
+                if (File.Exists(decompressedFile))
+                {
+                    File.Delete(decompressedFile);
+                }
+            }
+
+        }
+
+        [Fact]
+        public void CompressTestCompatibility()
+        {
+            var rnd = new Random();
+
+            var inputFile = Path.GetTempFileName();
+            var compressedFile = Path.GetTempFileName();
+            var decompressedFile = Path.GetTempFileName();
+
+            try
+            {
+
+                using (var fileStream = new FileStream(inputFile, FileMode.Create))
+                {
+                    var buffer = new byte[3 * 1024 * 1024];
+                    rnd.NextBytes(buffer);
+                    fileStream.Write(buffer);
+                }
+
+                var watch = new Stopwatch();
+                watch.Start();
+                Gzip.Compress(inputFile, compressedFile, 1, true);
+                watch.Stop();
+                output.WriteLine("Compress Compatibility: " + watch.ElapsedMilliseconds);
+                watch.Restart();
+                Gzip.Decompress(compressedFile, decompressedFile);
+                watch.Stop();
+                output.WriteLine("Decompress Compatibility: " + watch.ElapsedMilliseconds);
+
+                Assert.True(FileCompare(inputFile, decompressedFile));
+
             }
             finally
             {
